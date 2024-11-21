@@ -35,6 +35,9 @@ final class CentralViewController: UIViewController {
         self.connectedPeripheral = peripheral
         centralManager.connect(peripheral)
         peripheral.delegate = self
+        
+        let messageCharacteristic = CBMutableCharacteristic(type: messageCharacteristicUUID, properties: [.notify, .read, .write], value: nil, permissions: [.readable, .writeable])
+        connectedPeripheral?.setNotifyValue(true, for: messageCharacteristic)
     }
     
     private func disconnectPeripheral() {
@@ -51,6 +54,24 @@ final class CentralViewController: UIViewController {
         $discoveredPeripherals.combineLatest($connectedPeripheral).receive(on: DispatchQueue.main).sink { [weak self] _ in
             self?.peripheralsTableView.reloadData()
         }.store(in: &disposables)
+    }
+    
+    private func showMessageAlert(message: String) {
+        DispatchQueue.main.async {
+            let alert = UIAlertController(title: "Message received!", message: message, preferredStyle: .alert)
+            let okAction = UIAlertAction(title: "Dismiss", style: .cancel)
+            alert.addAction(okAction)
+            self.present(alert, animated: true)
+        }
+    }
+    
+    private func showImagePreview(imageData: Data) {
+        DispatchQueue.main.async {
+            let previewController = UIStoryboard(name: "Main", bundle: nil).instantiateViewController(identifier: "ImagePreviewViewController") as! ImagePreviewViewController
+            self.present(previewController, animated: true, completion: {
+                previewController.setImage(data: imageData)
+            })
+        }
     }
 
 }
@@ -139,6 +160,12 @@ extension CentralViewController: CBPeripheralDelegate {
         
         if let value = characteristic.value {
             print("Characteristic \(characteristic.uuid) value: \(value)")
+        }
+        
+        if characteristic.uuid == messageCharacteristicUUID, let data = characteristic.value, let message = String(data: data, encoding: .utf8) {
+            showMessageAlert(message: message)
+        } else if characteristic.uuid == jpegCharacteristicUUID, let data = characteristic.value {
+            showImagePreview(imageData: data)
         }
     }
     
